@@ -1,60 +1,69 @@
 import { NextResponse } from 'next/server';
-import type { NfcCard } from '../../../types/patient.types';
-
-// TODO: Substituir por dados reais do Supabase quando o banco estiver configurado
-const MOCK_CARDS: Map<string, NfcCard> = new Map([
-  ['card-1', {
-    id: 'card-1',
-    patient_id: '123',
-    token: 'abc123xyz789',
-    active: true,
-    created_at: '2026-05-20T10:00:00Z',
-    updated_at: '2026-05-20T10:00:00Z',
-    last_accessed: '2026-05-31T14:30:00Z',
-    access_count: 5,
-    description: 'Cartão de emergência principal',
-  }],
-  ['card-2', {
-    id: 'card-2',
-    patient_id: '123',
-    token: 'def456uvw012',
-    active: true,
-    created_at: '2026-05-25T15:20:00Z',
-    updated_at: '2026-05-25T15:20:00Z',
-    last_accessed: '2026-05-28T09:15:00Z',
-    access_count: 2,
-    description: 'Cartão de backup',
-  }],
-  ['card-3', {
-    id: 'card-3',
-    patient_id: '123',
-    token: 'ghi789rst345',
-    active: false,
-    created_at: '2026-05-10T08:00:00Z',
-    updated_at: '2026-05-29T11:45:00Z',
-    last_accessed: '2026-05-15T16:00:00Z',
-    access_count: 12,
-    description: 'Cartão antigo desativado',
-  }],
-]);
+import {
+  getAllCards,
+  getCardByToken,
+  createCard,
+  updateCard,
+  deleteCard,
+} from '@/lib/mockdb';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
+  const token = searchParams.get('token');
   const patientId = searchParams.get('patient_id');
 
-  if (!patientId) {
+  try {
+    if (token) {
+      // Get specific card by token
+      const card = await getCardByToken(token);
+      if (!card) {
+        return NextResponse.json(
+          { error: 'Cartão não encontrado' },
+          { status: 404 }
+        );
+      }
+      return NextResponse.json(card, { status: 200 });
+    }
+
+    // Get all cards (optionally filtered by patient_id)
+    const allCards = await getAllCards();
+    
+    if (patientId) {
+      const filteredCards = allCards.filter(card => card.patient_id === patientId);
+      return NextResponse.json(filteredCards, { status: 200 });
+    }
+
+    return NextResponse.json(allCards, { status: 200 });
+  } catch (error) {
+    console.error('Erro ao buscar cartões:', error);
     return NextResponse.json(
-      { error: 'patient_id é obrigatório' },
-      { status: 400 }
+      { error: 'Erro ao buscar cartões' },
+      { status: 500 }
     );
   }
+}
 
-  // TODO: Filtrar por patient_id do banco de dados
-  const cards = Array.from(MOCK_CARDS.values()).filter(
-    (card) => card.patient_id === patientId
-  );
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const { patient_id, description } = body;
 
-  return NextResponse.json(cards, { status: 200 });
+    if (!patient_id) {
+      return NextResponse.json(
+        { error: 'patient_id é obrigatório' },
+        { status: 400 }
+      );
+    }
+
+    const newCard = await createCard(patient_id, description);
+    return NextResponse.json(newCard, { status: 201 });
+  } catch (error) {
+    console.error('Erro ao criar cartão:', error);
+    return NextResponse.json(
+      { error: 'Erro ao criar cartão' },
+      { status: 500 }
+    );
+  }
 }
 
 export async function PUT(request: Request) {
@@ -69,23 +78,13 @@ export async function PUT(request: Request) {
       );
     }
 
-    const card = MOCK_CARDS.get(id);
-    if (!card) {
+    const updatedCard = await updateCard(id, { active, description });
+    if (!updatedCard) {
       return NextResponse.json(
         { error: 'Cartão não encontrado' },
         { status: 404 }
       );
     }
-
-    // TODO: Atualizar no banco de dados do Supabase
-    const updatedCard: NfcCard = {
-      ...card,
-      ...(active !== undefined && { active }),
-      ...(description !== undefined && { description }),
-      updated_at: new Date().toISOString(),
-    };
-
-    MOCK_CARDS.set(id, updatedCard);
 
     return NextResponse.json(updatedCard, { status: 200 });
   } catch (error) {
@@ -98,29 +97,37 @@ export async function PUT(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const id = searchParams.get('id');
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
 
-  if (!id) {
+    if (!id) {
+      return NextResponse.json(
+        { error: 'id do cartão é obrigatório' },
+        { status: 400 }
+      );
+    }
+
+    const deleted = await deleteCard(id);
+    if (!deleted) {
+      return NextResponse.json(
+        { error: 'Cartão não encontrado' },
+        { status: 404 }
+      );
+    }
+
     return NextResponse.json(
-      { error: 'id do cartão é obrigatório' },
-      { status: 400 }
+      { message: 'Cartão deletado com sucesso' },
+      { status: 200 }
+    );
+  } catch (error) {
+    console.error('Erro ao deletar cartão:', error);
+    return NextResponse.json(
+      { error: 'Erro ao deletar cartão' },
+      { status: 500 }
     );
   }
-
-  const card = MOCK_CARDS.get(id);
-  if (!card) {
-    return NextResponse.json(
-      { error: 'Cartão não encontrado' },
-      { status: 404 }
+}
     );
   }
-
-  // TODO: Deletar do banco de dados do Supabase
-  MOCK_CARDS.delete(id);
-
-  return NextResponse.json(
-    { message: 'Cartão deletado com sucesso' },
-    { status: 200 }
-  );
 }

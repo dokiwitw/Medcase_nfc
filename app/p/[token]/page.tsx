@@ -7,37 +7,6 @@ import { InfoGrid } from '../../../components/InfoGrid';
 import { MedicationList } from '../../../components/MedicationList';
 import { EmergencyContactRow } from '../../../components/EmergencyContactRow';
 
-const MOCK_PATIENT: PatientFullData = {
-  patient: {
-    id: '123',
-    name: 'Carlos Ribeiro',
-    birth_date: '1982-07-15',
-    blood_type: 'O+',
-    weight_kg: 82,
-    height_cm: 176,
-    insurance: 'Unimed',
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  allergies: [
-    { id: '1', patient_id: '123', name: 'Penicilina', severity: 'critical' },
-    { id: '2', patient_id: '123', name: 'Dipirona', severity: 'critical' },
-    { id: '3', patient_id: '123', name: 'Látex', severity: 'medium' },
-  ],
-  medications: [
-    { id: '1', patient_id: '123', name: 'Metformina', dosage: '850mg', frequency: '2x ao dia' },
-    { id: '2', patient_id: '123', name: 'Losartana', dosage: '50mg', frequency: '1x ao dia — manhã' },
-  ],
-  conditions: [
-    { id: '1', patient_id: '123', name: 'Diabetes tipo 2', diagnosed_at: '2018-03-10' },
-    { id: '2', patient_id: '123', name: 'Hipertensão arterial', diagnosed_at: '2020-06-22' },
-  ],
-  contacts: [
-    { id: '1', patient_id: '123', name: 'Maria Ribeiro', relationship: 'Esposa', phone: '(11) 98765-4321' },
-    { id: '2', patient_id: '123', name: 'Dr. Paulo Souza', relationship: 'Cardiologista', phone: '(11) 3456-7890' },
-  ],
-};
-
 function getInitials(name: string) {
   return name
     .split(' ')
@@ -62,21 +31,37 @@ function getAge(birthDate: string) {
 }
 
 async function fetchCardData(token: string) {
-  // TODO: substitua este mock por consulta ao Supabase usando lib/db.ts.
-  if (token === 'invalid') {
+  try {
+    const response = await fetch(`http://localhost:3000/api/cards?token=${token}`, {
+      cache: 'no-store',
+    });
+    
+    if (!response.ok) {
+      return null;
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Erro ao buscar cartão:', error);
     return null;
   }
-
-  return {
-    token,
-    active: true,
-    patient_id: '123',
-  };
 }
 
-async function fetchFullPatientData() {
-  // TODO: substitua pelo fetch de dados reais do Supabase em paralelo.
-  return MOCK_PATIENT;
+async function fetchFullPatientData(patientId: string): Promise<PatientFullData | null> {
+  try {
+    const response = await fetch(`http://localhost:3000/api/patients?patient_id=${patientId}`, {
+      cache: 'no-store',
+    });
+    
+    if (!response.ok) {
+      return null;
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Erro ao buscar dados do paciente:', error);
+    return null;
+  }
 }
 
 async function recordAccess(token: string) {
@@ -84,7 +69,6 @@ async function recordAccess(token: string) {
   const ip = headersList.get('x-forwarded-for') || headersList.get('x-real-ip') || 'unknown';
   const userAgent = headersList.get('user-agent') || 'unknown';
 
-  // TODO: registre em access_logs no Supabase usando lib/db.ts.
   console.log('Acesso registrado:', { token, ip, userAgent });
 }
 
@@ -95,7 +79,13 @@ export default async function EmergencyCardPage({ params }: { params: { token: s
     notFound();
   }
 
-  const [patientData] = await Promise.all([fetchFullPatientData(), recordAccess(params.token)]);
+  const patientData = await fetchFullPatientData(card.patient_id);
+  
+  if (!patientData) {
+    notFound();
+  }
+
+  await recordAccess(params.token);
 
   const { patient, allergies, medications, conditions, contacts } = patientData;
 
