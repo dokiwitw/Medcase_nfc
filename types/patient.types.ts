@@ -52,6 +52,18 @@ export interface NfcCard {
   token: string;
   active: boolean;
   created_at: string;
+  updated_at?: string;
+  last_accessed?: string;
+  access_count?: number;
+  description?: string;
+}
+
+export interface CardAccessLog {
+  id: string;
+  card_id: string;
+  ip_address: string;
+  user_agent: string;
+  accessed_at: string;
 }
 
 export interface PatientFullData {
